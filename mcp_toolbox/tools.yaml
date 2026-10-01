@@ -1,0 +1,96 @@
+kind: source
+name: support-db
+type: postgres
+host: 127.0.0.1
+port: 5433
+database: support
+user: ${TOOLBOX_DB_USER}
+password: ${TOOLBOX_DB_PASSWORD}
+---
+kind: tool
+name: get-order-status
+type: postgres-sql
+source: support-db
+description: Look up one order for the logged-in customer. Returns no row when that customer does not own the order.
+parameters:
+  - name: order_id
+    type: integer
+    description: The order id the customer asked about.
+  - name: customer_email
+    type: string
+    description: The logged-in customer's email. Bound from the session, not chosen by the model.
+statement: |
+  SELECT order_id, customer_email, delivery_address, status, items, order_date, total_amount
+  FROM customer_orders
+  WHERE order_id = $1 AND customer_email = $2
+---
+kind: tool
+name: find-customer-orders
+type: postgres-sql
+source: support-db
+description: List the logged-in customer's orders, newest first.
+parameters:
+  - name: customer_email
+    type: string
+    description: The logged-in customer's email. Bound from the session, not chosen by the model.
+statement: |
+  SELECT order_id, customer_email, delivery_address, status, items, order_date, total_amount
+  FROM customer_orders
+  WHERE customer_email = $1
+  ORDER BY order_date DESC, order_id DESC
+---
+kind: tool
+name: action-log
+type: postgres-sql
+source: support-db
+description: Record a requested change. This does not change the order. An order_id is logged only when that order belongs to the logged-in customer.
+parameters:
+  - name: user_email
+    type: string
+    description: The logged-in customer's email. Bound from the session, not chosen by the model.
+  - name: action_type
+    type: string
+    description: One of CANCEL_ORDER, RETURN_ORDER, UPDATE_ADDRESS, UPDATE_PREFERENCE, UPDATE_PROFILE.
+  - name: parameters
+    type: string
+    description: A JSON object. Include order_id when the request names an order.
+statement: |
+  INSERT INTO actions_log (user_email, action_type, parameters)
+  SELECT $1, $2, $3::jsonb
+  WHERE NOT ($3::jsonb ? 'order_id')
+     OR EXISTS (
+          SELECT 1
+          FROM customer_orders
+          WHERE order_id = ($3::jsonb ->> 'order_id')::integer
+            AND customer_email = $1
+        )
+  RETURNING id, user_email, action_type, parameters
+---
+kind: tool
+name: verify-login
+type: postgres-sql
+source: support-db
+description: Check an email and password. Used by the CLI only, never by the support agent.
+parameters:
+  - name: email
+    type: string
+    description: The email the person typed at login.
+  - name: password
+    type: string
+    description: The password the person typed at login.
+statement: |
+  SELECT email, full_name
+  FROM users
+  WHERE email = $1 AND password = $2
+---
+kind: toolset
+name: login
+tools:
+  - verify-login
+---
+kind: toolset
+name: support-agent
+tools:
+  - get-order-status
+  - find-customer-orders
+  - action-log

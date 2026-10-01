@@ -1,0 +1,13 @@
+google-adk
+toolbox-core
+mem0ai
+python-dotenv
+fastapi
+uvicorn
+httpx
+arize-phoenix
+openinference-instrumentation-google-genai
+openinference-semantic-conventions
+# google-adk 2.10 allows opentelemetry-sdk only up to 1.42.1.
+opentelemetry-sdk==1.42.1
+opentelemetry-exporter-otlp-proto-http==1.42.1

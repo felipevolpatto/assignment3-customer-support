@@ -1,0 +1,24 @@
+name: customer-support
+
+services:
+  postgres:
+    image: postgres:16
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # Host 5432 is already DevLake. This database listens on 5432 inside the
+      # container and is published only on localhost at POSTGRES_PORT.
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - customer_support_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  customer_support_pg:
