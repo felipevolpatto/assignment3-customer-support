@@ -185,12 +185,12 @@ Three that must not:
 - **What the Masker reported on my PII test:** masked 1 email and 1 phone number, showing [EMAIL] and [PHONE].
 
 ## Stage 9: the web UI
-- **My sketch, in words:**
-- **Something the UI shows that the CLI doesn't (feature or leak?):**
+- **My sketch, in words:** The page has the conversation on the left and a "What happened" column on the right. Each step appears in that column while the answer is still arriving, with a colored dot, the time, and the span name. The SQL and the tool rows stay folded until the customer opens them.
+- **Something the UI shows that the CLI doesn't (feature or leak?):** The column shows the full SQL and the order row as a table. The CLI only prints the tool name, ok, and the time. The row is Alice's own order, and the email in the SQL is marked as bound from the login, so this is a feature: it shows the work behind the answer without exposing another customer's data.
 
 ## Stage 10: the eval runner
-- **How I handled the memory waits:**
-- **First run's failing rows, and what I changed:**
-- **Second run: see `reports/eval.json` (don't retype numbers here).**
-- **Successful turn I read end to end (trace id), and what it taught me:**
-- **Failing turn I read end to end (trace id), and what it taught me:**
+- **How I handled the memory waits:** One customer at a time. While that customer's two minutes ran, the runner sent other customers' tests. If those finished early, it slept the rest. The shortest wait in the report was 124 seconds.
+- **First run's failing rows, and what I changed:** T-ERR was 0.048 because A03–A08 died on a Gemini 429 after the free quota ran out, and those error turns also dropped T-EVENT-ORDER to 0.952. T-ACTION-LOGGED was 0 because action-log failed in Postgres (text versus varchar) and the turn still marked both calls as ok. T-MUTATE was 1 only because the snapshot was taken before a reset, and NOW() changed the dates; no tool writes customer_orders. T-MEM-RECALL was 0.4: M02, M03 and M10 were blocked by the guardrail before recall, and M01, M05 and M07 did not insert the keyword. I cast each action-log parameter once, count a toolbox error string as a failed tool, compare the order table only inside one reset, and open a new session for every eval message so the token budget is that turn. Two turns took more than 30 seconds, and two used more than 30,000 tokens. The new session per message is there because of those token totals.
+- **Second run: see `reports/eval.json` (don't retype numbers here).** The second run used gemini-3.1-flash-lite because the free quota for the previous model was gone, and that model went past 30 seconds.
+- **Successful turn I read end to end (trace id), and what it taught me:** Trace 0d0cb11bdbfc3d8e46de9c7f0f53403d is O01, Alice asking for order 3. The reply only says the status. The trace shows the guards, then two model calls with get-order-status between them, then the masker and the memory save.
+- **Failing turn I read end to end (trace id), and what it taught me:** Trace 50354e204653b05caa4afb3ecd1b0464 is the turn with the Judge stopped. Only the sanitizer ran. The Judge span is an error, connection refused, and the support agent never started, so the customer got no order status.

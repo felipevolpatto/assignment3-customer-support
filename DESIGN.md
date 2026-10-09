@@ -148,16 +148,14 @@ The seed stores passwords in plain text. That is demo data, not a pattern I will
 
 ## Trade-offs
 
-No latency number below is measured yet. I will fill the milliseconds from Phoenix traces
-after stage 6, and I will not loosen a gate to make a first run pass. The original gates
-stay in `reports/eval.json` even if I later argue one of them.
+The second run measured these times. A blocked attack finished in 2.3 seconds, inside the 5 second limit. A typical order answer took 31 seconds, and the slow tail took 64 seconds, both past the 8 and 15 second limits. On one order the Judge alone took 13 seconds. The run used gemini-3.1-flash-lite because the free quota for the faster model had run out. I am not loosening the limits.
 
 **What each guard costs, and whether it is worth it.**
 
 | Guard | What I expect it to cost | Worth it? |
 |---|---|---|
 | Sanitizer | No model call. A few milliseconds. | Yes. It is the cheap block for what the length limit and the character allow-list catch. The Judge's deterministic detector is the other cheap block: an obvious attack (`' OR 1=1`, `<script>`, a path traversal) stops there without a Gemini call. Both keep a blocked attack inside `T-LAT-BLOCK-P95` (5 000 ms). |
-| Judge | An A2A round trip on every message that passes the Sanitizer. Inside, the deterministic detector runs first; Gemini is called only when the detector does not block. Likely the largest single cost on a passing turn. | Yes. It is the layer that catches injection the allow-list cannot. I will record its actual milliseconds here after the first traced turn. |
+| Judge | An A2A round trip on every message that passes the Sanitizer. Inside, the deterministic detector runs first; Gemini is called only when the detector does not block. Likely the largest single cost on a passing turn. | Yes. It is the layer that catches injection the allow-list cannot. One measured Judge call took 13 seconds. |
 | Guardrail | A Gemini call on every message that passes the Judge. | Yes, because the Judge does not know what this shop is for. The reference build blocked "leave packages at the back door" and let a poem through. That is the failure this layer exists to avoid. |
 | Masker | An A2A round trip after the support agent answers, only on turns that reached the agent. A model call only if I build the Masker with one; pattern matching may be enough. | Yes. A leak of someone else's phone number is not recoverable by being fast. |
 

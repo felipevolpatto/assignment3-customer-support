@@ -79,6 +79,11 @@ def with_memories(message, memories):
     return "\n".join(lines)
 
 
+def ping():
+    """Confirm Mem0 accepts the key. A failure stays an error, not ok."""
+    _client().get_project()
+
+
 def save_message(user_id, message):
     """Store the customer's message only. Mem0 extracts it in the background (R-4)."""
     try:

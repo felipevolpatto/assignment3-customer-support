@@ -2,6 +2,7 @@ google-adk
 toolbox-core
 mem0ai
 python-dotenv
+pyyaml
 fastapi
 uvicorn
 httpx

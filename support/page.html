@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shop support</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font: 15px/1.5 system-ui, sans-serif; color: #1f2937; background: #f3f4f6; display: flex; flex-direction: column; }
+    [hidden] { display: none !important; }
+    header { flex: none; display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #111827; color: #f9fafb; }
+    header .who { font-size: 13px; color: #d1d5db; margin-right: 12px; }
+    button { font: inherit; cursor: pointer; border: 0; border-radius: 8px; padding: 9px 16px; background: #2563eb; color: white; }
+    button:disabled { background: #93c5fd; cursor: wait; }
+    button.quiet { background: transparent; color: #f9fafb; border: 1px solid #4b5563; padding: 5px 12px; }
+    input { font: inherit; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px; width: 100%; }
+
+    #login { margin: auto; width: min(360px, 90vw); background: white; padding: 28px; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.08); display: flex; flex-direction: column; gap: 14px; }
+    #login h1 { margin: 0; font-size: 20px; }
+    #login label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #4b5563; }
+    .error { color: #b91c1c; font-size: 13px; min-height: 1em; margin: 0; }
+
+    #app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 380px; }
+    #chat { min-height: 0; display: flex; flex-direction: column; }
+    #log { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .empty { margin: auto; color: #6b7280; text-align: center; }
+    .bubble { max-width: min(560px, 85%); padding: 10px 14px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .user { align-self: flex-end; background: #2563eb; color: white; border-bottom-right-radius: 4px; }
+    .agent { align-self: flex-start; background: white; border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
+    .agent.pending { color: #6b7280; font-style: italic; }
+    .agent.failed { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+    #composer { flex: none; display: flex; gap: 8px; padding: 12px 20px; background: white; border-top: 1px solid #e5e7eb; }
+
+    #rail { min-height: 0; overflow-y: auto; overflow-x: hidden; background: white; border-left: 1px solid #e5e7eb; padding: 14px; }
+    #rail h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; }
+    .turn { border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+    .turn-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+    .turn-head span { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .turn-head a { flex: none; color: #2563eb; }
+    .step { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: start; padding: 6px 0; border-top: 1px solid #f3f4f6; font-size: 13px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; background: #9ca3af; }
+    .dot.passed { background: #16a34a; }
+    .dot.blocked { background: #d97706; }
+    .dot.error { background: #dc2626; }
+    .dot.tool { background: #2563eb; }
+    .step .name { font-weight: 600; }
+    .step .detail { color: #4b5563; overflow-wrap: anywhere; }
+    .step .ms { color: #6b7280; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .span { display: block; font-size: 11px; color: #9ca3af; font-family: ui-monospace, monospace; }
+    details { margin-top: 4px; }
+    summary { cursor: pointer; color: #2563eb; font-size: 12px; }
+    pre { margin: 6px 0 0; padding: 8px; background: #f9fafb; border-radius: 6px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .table-wrap { max-width: 100%; overflow-x: auto; margin-top: 6px; }
+    table { border-collapse: collapse; font-size: 12px; }
+    td, th { border: 1px solid #e5e7eb; padding: 3px 6px; text-align: left; vertical-align: top; max-width: 180px; overflow-wrap: anywhere; }
+    th { background: #f9fafb; }
+    .memory { font-size: 12px; color: #4b5563; padding-left: 4px; }
+
+    @media (max-width: 860px) {
+      #app { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) 40%; }
+      #rail { border-left: 0; border-top: 1px solid #e5e7eb; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Shop support</strong>
+    <div><span id="who" class="who"></span><button id="logout" class="quiet" type="button" hidden>Log out</button></div>
+  </header>
+
+  <form id="login">
+    <h1>Sign in</h1>
+    <label>Email <input id="email" autocomplete="username" required></label>
+    <label>Password <input id="password" type="password" autocomplete="current-password" required></label>
+    <button id="login-button" type="submit">Log in</button>
+    <p id="login-error" class="error"></p>
+  </form>
+
+  <main id="app" hidden>
+    <section id="chat">
+      <div id="log"><p class="empty">Ask about an order, a delivery, a return, or your account.</p></div>
+      <form id="composer">
+        <input id="message" placeholder="Ask about an order" autocomplete="off">
+        <button id="send" type="submit">Send</button>
+      </form>
+    </section>
+    <aside id="rail"><h2>What happened</h2></aside>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = { userId: "" };
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      return node;
+    }
+
+    function setReply(node, text) {
+      node.replaceChildren();
+      String(text).split("**").forEach((part, index) => {
+        node.appendChild(index % 2 ? el("strong", "", part) : document.createTextNode(part));
+      });
+    }
+
+    $("login").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      $("login-error").textContent = "";
+      $("login-button").disabled = true;
+      try {
+        const response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: $("email").value, password: $("password").value }),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+          $("login-error").textContent = body.error || "Login failed.";
+          return;
+        }
+        state.userId = body.user_id;
+        $("password").value = "";
+        $("who").textContent = body.full_name + (body.is_premium ? " (premium)" : "");
+        $("login").hidden = true;
+        $("app").hidden = false;
+        $("logout").hidden = false;
+        $("message").focus();
+      } catch {
+        $("login-error").textContent = "The server did not answer.";
+      } finally {
+        $("login-button").disabled = false;
+      }
+    });
+
+    $("logout").addEventListener("click", async () => {
+      await fetch("/api/logout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ user_id: state.userId }),
+      });
+      state.userId = "";
+      $("log").replaceChildren(el("p", "empty", "Ask about an order, a delivery, a return, or your account."));
+      $("rail").replaceChildren(el("h2", "", "What happened"));
+      $("who").textContent = "";
+      $("app").hidden = true;
+      $("logout").hidden = true;
+      $("login").hidden = false;
+    });
+
+    function addStep(turn, dotClass, name, detail, ms, span) {
+      const row = el("div", "step");
+      row.appendChild(el("span", "dot " + dotClass));
+      const body = el("div");
+      body.appendChild(el("span", "name", name + " "));
+      if (detail) body.appendChild(el("span", "detail", detail));
+      if (span) body.appendChild(el("span", "span", span));
+      row.append(body, el("span", "ms", ms === undefined || ms === null ? "" : ms + " ms"));
+      turn.appendChild(row);
+      return body;
+    }
+
+    function fillSql(info, args) {
+      if (!info || !info.statement) return "";
+      let sql = info.statement;
+      (info.params || []).forEach((name, index) => {
+        const value = Object.prototype.hasOwnProperty.call(args || {}, name) ? JSON.stringify(args[name]) : "<bound from login>";
+        sql = sql.split("$" + (index + 1)).join(value);
+      });
+      return sql;
+    }
+
+    function resultTable(result) {
+      const rows = Array.isArray(result) ? result : [result];
+      if (!rows.length) return el("p", "detail", "No rows.");
+      if (rows[0] === null || typeof rows[0] !== "object") return el("pre", "", JSON.stringify(result, null, 2));
+      const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+      const table = el("table");
+      const head = el("tr");
+      keys.forEach((key) => head.appendChild(el("th", "", key)));
+      table.appendChild(head);
+      rows.forEach((row) => {
+        const tr = el("tr");
+        keys.forEach((key) => {
+          const value = row[key];
+          tr.appendChild(el("td", "", typeof value === "string" ? value : JSON.stringify(value)));
+        });
+        table.appendChild(tr);
+      });
+      const wrap = el("div", "table-wrap");
+      wrap.appendChild(table);
+      return wrap;
+    }
+
+    function folded(label, child) {
+      const details = el("details");
+      details.appendChild(el("summary", "", label));
+      details.appendChild(child);
+      return details;
+    }
+
+    function render(turn, head, event, reply) {
+      if (event.type === "trace") {
+        const link = el("a", "", "Open trace");
+        link.href = event.url;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        head.appendChild(link);
+      } else if (event.type === "step") {
+        const body = addStep(turn, event.status, event.key, event.detail, event.ms, event.span);
+        (event.memories || []).forEach((item) => {
+          const flag = item.inserted ? "used" : "skipped, " + item.reason;
+          body.appendChild(el("div", "memory", "score " + item.score + " (" + flag + "): " + item.memory));
+        });
+      } else if (event.type === "llm") {
+        addStep(turn, "", "model", event.decision, event.ms, event.span);
+      } else if (event.type === "tool_call") {
+        const body = addStep(turn, "tool", event.name, JSON.stringify(event.args), null, event.span);
+        body.appendChild(folded("SQL", el("pre", "", fillSql(event.info, event.args))));
+      } else if (event.type === "tool_result") {
+        const body = addStep(turn, event.ok ? "passed" : "error", "result", event.ok ? "ok" : "failed", event.ms);
+        body.appendChild(folded("Rows", resultTable(event.result)));
+      } else if (event.type === "final") {
+        reply.classList.remove("pending");
+        setReply(reply, event.response);
+      } else if (event.type === "error") {
+        reply.classList.remove("pending");
+        reply.classList.add("failed");
+        reply.textContent = "Something went wrong at " + event.step + ". Please try again.";
+        addStep(turn, "error", event.step, event.error);
+      }
+      $("log").scrollTop = $("log").scrollHeight;
+    }
+
+    $("composer").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const message = $("message").value.trim();
+      if (!message) return;
+      $("message").value = "";
+      $("send").disabled = true;
+      const empty = $("log").querySelector(".empty");
+      if (empty) empty.remove();
+      const reply = el("div", "bubble agent pending", "Checking your request…");
+      $("log").append(el("div", "bubble user", message), reply);
+      $("log").scrollTop = $("log").scrollHeight;
+
+      const turn = el("section", "turn");
+      const head = el("div", "turn-head");
+      head.appendChild(el("span", "", message));
+      turn.appendChild(head);
+      $("rail").querySelector("h2").after(turn);
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ user_id: state.userId, message }),
+        });
+        if (!response.ok || !response.body) {
+          const body = await response.json().catch(() => ({}));
+          reply.classList.remove("pending");
+          reply.classList.add("failed");
+          reply.textContent = body.error || "The request failed.";
+          return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          lines.forEach((line) => { if (line) render(turn, head, JSON.parse(line), reply); });
+        }
+      } catch {
+        reply.classList.remove("pending");
+        reply.classList.add("failed");
+        reply.textContent = "The connection dropped. Please try again.";
+      } finally {
+        $("send").disabled = false;
+        $("message").focus();
+      }
+    });
+  </script>
+</body>
+</html>

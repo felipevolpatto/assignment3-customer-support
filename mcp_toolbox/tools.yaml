@@ -53,16 +53,17 @@ parameters:
     description: One of CANCEL_ORDER, RETURN_ORDER, UPDATE_ADDRESS, UPDATE_PREFERENCE, UPDATE_PROFILE.
   - name: parameters
     type: string
-    description: A JSON object. Include order_id when the request names an order.
+    description: 'JSON text only. Use {"order_id": 4} when the request names an order, or {"phone": "555-0142"} for a profile change.'
 statement: |
   INSERT INTO actions_log (user_email, action_type, parameters)
-  SELECT $1, $2, $3::jsonb
-  WHERE NOT ($3::jsonb ? 'order_id')
+  SELECT email, kind, payload
+  FROM (SELECT $1::text AS email, $2::text AS kind, $3::jsonb AS payload) AS request
+  WHERE NOT (payload ? 'order_id')
      OR EXISTS (
           SELECT 1
           FROM customer_orders
-          WHERE order_id = ($3::jsonb ->> 'order_id')::integer
-            AND customer_email = $1
+          WHERE order_id = (payload ->> 'order_id')::integer
+            AND customer_email = email
         )
   RETURNING id, user_email, action_type, parameters
 ---
@@ -79,7 +80,7 @@ parameters:
     type: string
     description: The password the person typed at login.
 statement: |
-  SELECT email, full_name
+  SELECT email, full_name, is_premium_customer
   FROM users
   WHERE email = $1 AND password = $2
 ---

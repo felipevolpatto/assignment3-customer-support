@@ -6,6 +6,7 @@ import time
 import uuid
 from pathlib import Path
 
+import yaml
 from google.genai import types
 from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from opentelemetry import trace
@@ -21,23 +22,37 @@ from support.telemetry import flush_traces, trace_url
 REFUSAL = "I can't help with that request."
 
 RUNS = Path("runs")
-TOOL_INFO = {
-    "get-order-status": {
-        "access": "READ",
-        "statement": "SELECT order_id, status FROM customer_orders WHERE order_id = $1 AND customer_email = $2",
-        "params": ["order_id", "customer_email"],
-    },
-    "find-customer-orders": {
-        "access": "READ",
-        "statement": "SELECT order_id, status FROM customer_orders WHERE customer_email = $1 ORDER BY order_date DESC",
-        "params": ["customer_email"],
-    },
-    "action-log": {
-        "access": "WRITE",
-        "statement": "INSERT INTO actions_log (user_email, action_type, parameters) SELECT $1, $2, $3::jsonb",
-        "params": ["user_email", "action_type", "parameters"],
-    },
-}
+TOOLS_FILE = Path(__file__).resolve().parent.parent / "mcp_toolbox" / "tools.yaml"
+
+
+def _tool_info():
+    """Read each tool's SQL from tools.yaml, so the shown SQL is the SQL that runs."""
+    info = {}
+    for doc in yaml.safe_load_all(TOOLS_FILE.read_text()):
+        if not doc or doc.get("kind") != "tool" or "statement" not in doc:
+            continue
+        statement = doc["statement"].strip()
+        info[doc["name"]] = {
+            "access": "READ" if statement.upper().startswith("SELECT") else "WRITE",
+            "statement": statement,
+            "params": [param["name"] for param in doc.get("parameters") or []],
+        }
+    return info
+
+
+TOOL_INFO = _tool_info()
+
+
+def _tool_failed(result):
+    """A toolbox failure comes back as text, not as an error field."""
+    if isinstance(result, str):
+        return result.lower().startswith("error")
+    if isinstance(result, dict):
+        if result.get("error"):
+            return True
+        inner = result.get("result")
+        return isinstance(inner, str) and inner.lower().startswith("error")
+    return False
 
 
 def unwrap(raw):
@@ -242,7 +257,8 @@ async def _complete(tracer, runner, *, user_id, session_id, message, model, turn
             for reply in responses:
                 tool_id = tool_ids.get(reply.id, stats["next_tool_id"])
                 result = unwrap(getattr(reply, "response", None))
-                ok = not (isinstance(result, dict) and result.get("error"))
+                failed = _tool_failed(result)
+                ok = not failed
                 took = elapsed()
                 tool_calls.append({
                     "name": reply.name,
